@@ -17,9 +17,11 @@ from sys import stdin, stdout
 from tty import setcbreak
 from selectors import DefaultSelector, EVENT_READ
 
+
 class KeyAct:
 
-    def __init__(self, key_map, default=lambda: None, input=stdin, output=stdout):
+    def __init__(
+            self, key_map, default=lambda: None, input=stdin, output=stdout):
         self.key_map = key_map
         self.default = default
         self.input = input
