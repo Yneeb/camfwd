@@ -14,7 +14,7 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from camfwd.act import KeyAct
-from gphoto2 import Camera
+from gphoto2 import Camera, GPhoto2Error
 from contextlib import contextmanager
 from subprocess import Popen, PIPE
 from sys import argv
@@ -26,6 +26,11 @@ INC_DEC_KEYS = (
     ("f-number", r"Focal Ratio: {}", "i", "k"),
     ("iso", r"Film Speed: {}", "o", "l")
 )
+FOCUS_STEPS = {
+    "q": 1000, "a": -1000,
+    "w": 100, "s": -100,
+    "e": 10, "d": -10
+}
 
 stop = False
 
@@ -51,6 +56,18 @@ class CameraControl(Camera):
 
     def dec_config(self, config):
         return self.inc_dec_config(config, -1)
+
+    def change_focus(
+            self, amount, focus_widget="focusmode2", focus_value="4",
+            focusdrive="manualfocusdrive"):
+        config = self.get_config()
+        config.get_child_by_name(focus_widget).set_value(focus_value)
+        widget = config.get_child_by_name(focusdrive)
+        widget.set_value(amount)
+        try:
+            self.set_config(config)
+        except GPhoto2Error:
+            pass
 
     def __enter__(self):
         self.init()
@@ -84,10 +101,19 @@ def _inc_dec_action(camera, config, fmt, inc, dec):
     return {inc: _function_generate(1), dec: _function_generate(-1)}
 
 
+def _focus_action(camera, amount, key):
+    def _focus_internal(_fmt="Focus: {}"):
+        camera.change_focus(amount)
+        return _fmt.format(f"{amount:+d}")
+    return {key: _focus_internal}
+
+
 def main(camera, command):
     key_actions = {}
     for key_config in INC_DEC_KEYS:
         key_actions.update(_inc_dec_action(camera, *key_config))
+    for key, step in FOCUS_STEPS.items():
+        key_actions.update(_focus_action(camera, step, key))
     with (
             Popen(command, bufsize=0, stdin=PIPE) as process,
             KeyAct(key_actions) as key_act):
