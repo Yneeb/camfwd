@@ -16,14 +16,28 @@
 from sys import stdin, stdout
 from tty import setcbreak
 from selectors import DefaultSelector, EVENT_READ
+from collections import deque
 
 
 class KeyAct:
 
-    def __init__(
-            self, key_map, default=lambda: None, input=stdin, output=stdout):
+    def __init__(self, key_map, io_handler, default=lambda: None):
         self.key_map = key_map
+        self.io_handler = io_handler
         self.default = default
+
+    def process_input(self):
+        key = self.io_handler.get_key()
+        if key is None:
+            return
+        status = self.key_map.get(key, self.default)()
+        if status is not None:
+            self.io_handler.write(f"{status}\n")
+
+
+class StandardIO:
+
+    def __init__(self, input=stdin, output=stdout):
         self.input = input
         self.output = output
 
@@ -37,23 +51,31 @@ class KeyAct:
         self.selector.close()
         return False
 
-    def _process_key(self, fileobj):
-        key = fileobj.read(1)
-        status = self.key_map.get(key, self.default)()
-        if status is not None:
-            self.output.write(f"{status}\n")
-
-    def _process_events(self, events):
-        processed = 0
+    def get_key(self):
+        events = self.selector.select(0)
         for key, mask in events:
             obj = key.fileobj
             if obj is not self.input:
                 continue
             if not mask & EVENT_READ:
                 continue
-            self._process_key(obj)
-        return processed
+            return obj.read(1)
+        return None
 
-    def process_input(self):
-        while self._process_events(self.selector.select(0)) > 0:
-            pass
+    def write(self, text):
+        self.output.write(text)
+
+
+class InternalIO:
+
+    def __init__(self):
+        self.output = deque()
+        self.input = deque()
+
+    def get_key(self):
+        if len(self.output) > 0:
+            return self.output.popleft()
+        return None
+
+    def write(self, text):
+        self.input.append(text)

@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from camfwd.act import KeyAct
+from camfwd.act import KeyAct, StandardIO
 from gphoto2 import Camera, GPhoto2Error
 from contextlib import contextmanager
 from subprocess import Popen, PIPE
@@ -36,6 +36,11 @@ stop = False
 
 
 class CameraControl(Camera):
+
+    def __init__(self, *args, vf_config="viewfinder", vf_value=1, **kwargs):
+        self.vf_config = vf_config
+        self.vf_value = vf_value
+        super().__init__(*args, **kwargs)
 
     def get_frame(self):
         return bytes(self.capture_preview().get_data_and_size())
@@ -69,12 +74,21 @@ class CameraControl(Camera):
         except GPhoto2Error:
             pass
 
-    def __enter__(self):
+    def open(self):
         self.init()
+        vf = self.get_single_config(self.vf_config)
+        vf.set_value(self.vf_value)
+        self.set_single_config(self.vf_config, vf)
         return self
 
-    def __exit__(self, *_):
+    def close(self):
         self.exit()
+
+    def __enter__(self):
+        return self.open()
+
+    def __exit__(self, *_):
+        self.close()
         return False
 
 
@@ -116,7 +130,8 @@ def main(camera, command):
         key_actions.update(_focus_action(camera, step, key))
     with (
             Popen(command, bufsize=0, stdin=PIPE) as process,
-            KeyAct(key_actions) as key_act):
+            StandardIO() as stdio):
+        key_act = KeyAct(key_actions, stdio)
         while not stop:
             _stream_image(camera, process.stdin)
             key_act.process_input()
