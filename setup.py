@@ -11,6 +11,6 @@ setup(
     classifiers=(
         "Programming Language :: Python :: 3.9",
         "Operating System :: POSIX :: Linux"),
-    install_requires=("gphoto2~=2.3",),
+    install_requires=("gphoto2~=2.3", "Pillow~=9.3"),
     python_requires="~=3.9"
 )

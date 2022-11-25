@@ -14,6 +14,7 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from camfwd.act import KeyAct, StandardIO
+from camfwd.analysis import image_from_bytes, get_contrast, get_entropy
 from gphoto2 import Camera, GPhoto2Error
 from contextlib import contextmanager
 from subprocess import Popen, PIPE
@@ -31,6 +32,10 @@ FOCUS_STEPS = {
     "w": 100, "s": -100,
     "e": 10, "d": -10
 }
+ANALYSIS_MODES = (
+    ("z", get_contrast, r"Contrast (Greyscale Standard Deviation): {:f}"),
+    ("x", get_entropy, r"Entropy: {:f}")
+)
 
 stop = False
 
@@ -122,12 +127,21 @@ def _focus_action(camera, amount, key):
     return {key: _focus_internal}
 
 
+def _pillow_analysis(camera, func, fmt):
+    def _analysis_internal():
+        pil_image = image_from_bytes(camera.get_frame())
+        return fmt.format(func(pil_image))
+    return _analysis_internal
+
+
 def main(camera, command):
     key_actions = {}
     for key_config in INC_DEC_KEYS:
         key_actions.update(_inc_dec_action(camera, *key_config))
     for key, step in FOCUS_STEPS.items():
         key_actions.update(_focus_action(camera, step, key))
+    for key, *other in ANALYSIS_MODES:
+        key_actions[key] = _pillow_analysis(camera, *other)
     with (
             Popen(command, bufsize=0, stdin=PIPE) as process,
             StandardIO() as stdio):
