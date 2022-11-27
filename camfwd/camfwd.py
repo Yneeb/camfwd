@@ -15,7 +15,7 @@
 
 from camfwd.act import KeyAct, StandardIO
 from camfwd.analysis import image_from_bytes, get_contrast, get_entropy
-from gphoto2 import Camera, GPhoto2Error
+from gphoto2 import Camera, GPhoto2Error, GP_CAPTURE_IMAGE
 from contextlib import contextmanager
 from subprocess import Popen, PIPE
 from sys import argv
@@ -36,6 +36,7 @@ ANALYSIS_MODES = (
     ("z", get_contrast, r"Contrast (Greyscale Standard Deviation): {:f}"),
     ("x", get_entropy, r"Entropy: {:f}")
 )
+CAPTURE_KEY = "\n"
 
 stop = False
 
@@ -78,6 +79,13 @@ class CameraControl(Camera):
             self.set_config(config)
         except GPhoto2Error:
             pass
+
+    def capture_image(self, capture_target="capturetarget", capture_value="1"):
+        config = self.get_config()
+        config.get_child_by_name(capture_target).set_value(capture_value)
+        self.set_config(config)
+        path = self.capture(GP_CAPTURE_IMAGE)
+        return path.folder, path.name
 
     def open(self):
         self.init()
@@ -134,6 +142,13 @@ def _pillow_analysis(camera, func, fmt):
     return _analysis_internal
 
 
+def _capture(camera):
+    def _capture_internal():
+        path, name = camera.capture_image()
+        return f"Image Captured: [Folder: {path}] [Name: {name}]"
+    return _capture_internal
+
+
 def main(camera, command):
     key_actions = {}
     for key_config in INC_DEC_KEYS:
@@ -142,6 +157,7 @@ def main(camera, command):
         key_actions.update(_focus_action(camera, step, key))
     for key, *other in ANALYSIS_MODES:
         key_actions[key] = _pillow_analysis(camera, *other)
+    key_actions[CAPTURE_KEY] = _capture(camera)
     with (
             Popen(command, bufsize=0, stdin=PIPE) as process,
             StandardIO() as stdio):
