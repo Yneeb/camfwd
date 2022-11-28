@@ -14,10 +14,12 @@
 # this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from camfwd.camfwd import CameraControl
-from gphoto2 import GPhoto2Error
+from gphoto2 import GPhoto2Error, GP_FILE_TYPE_NORMAL
 from unittest import TestCase
 from itertools import product
 from time import sleep
+
+JPEG_MAGIC = b"\xff\xd8\xff"
 
 
 def clamp(values, index, cur):
@@ -67,7 +69,14 @@ class TestCameraControl(TestCase):
                 sleep(sleep_time)
 
     def test_frame_capture(self):
-        JPEG_MAGIC = b"\xff\xd8\xff"
         image = self.cam_ctl.get_frame()
         self.assertIsInstance(image, bytes)
+        self.assertTrue(image.startswith(JPEG_MAGIC))
+
+    def test_image_capture(self):
+        folder, name = self.cam_ctl.capture_image()
+        self.assertFalse(name.startswith("capt"))
+        image = bytes(
+            self.cam_ctl.file_get(folder, name, GP_FILE_TYPE_NORMAL).
+            get_data_and_size())
         self.assertTrue(image.startswith(JPEG_MAGIC))
